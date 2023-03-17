@@ -1,0 +1,5 @@
+/target
+*.png
+*.jpg
+*.jpeg
+color_code.json
