@@ -218,8 +218,8 @@ fn make_mosaic_art() {
     sorted_results.sort_by(|a, b| a.0.cmp(&b.0));
     let mut result_mosaic_img: ImageBuffer<Rgba<u8>, Vec<u8>> =
         ImageBuffer::new(width * 50, height * 50);
-    for (_, result) in sorted_results.iter() {
-        match result_mosaic_img.copy_from(result, 0, height / THREAD_NUM * 50) {
+    for (index, result) in sorted_results.iter() {
+        match result_mosaic_img.copy_from(result, 0, height / THREAD_NUM * 50*index) {
             Ok(file) => file,
             Err(err) => panic!("{}", err),
         }
