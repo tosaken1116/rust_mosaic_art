@@ -9,12 +9,17 @@ use serde_json::Result;
 use std::io::Write;
 use std::io::Read;
 use std::io::BufReader;
+use std::sync::Mutex;
+use std::thread;
+use std::sync::{ Arc};
+
 fn main() {
     let seeds_images_dir = "./src/seed_images";
-    crop_images((&seeds_images_dir).to_string());
-    save_img_colors((&seeds_images_dir).to_string());
+    // crop_images((&seeds_images_dir).to_string());
+    // save_img_colors((&seeds_images_dir).to_string());
     make_mosaic_art();
 }
+
 
 fn crop_images(dir_name:String){
     let files = fs::read_dir(dir_name).unwrap();
@@ -22,13 +27,7 @@ fn crop_images(dir_name:String){
     for (index,file) in files.enumerate(){
         let file = file.unwrap();
         let file_path = file.path();
-        let file = File::open(file_path).unwrap();
-        let mut buf_reader = BufReader::new(file);
-        let img =  image::load(&mut buf_reader, image::ImageFormat::Jpeg).unwrap();
-        // let img =match image::open(file_path){
-        //     Ok(f) => f,
-        //     Err(e)=> return
-        // };
+        let img = image::open(file_path).unwrap();
 
         save_img(image::DynamicImage::ImageRgba8(resize_img(crop_img(img),50)),format!("./src/crop/{}.png",index.to_string()));
     }
@@ -105,20 +104,57 @@ fn calculate_color_distance(color1: [u8;3], color2: Rgb<u8>) -> i32{
     (color1[0]as i32 - color2[0] as i32).abs().pow(2)+(color1[1]as i32 - color2[1] as i32).abs().pow(2) + (color1[2]as i32 - color2[2] as i32).abs().pow(2)
 }
 
+fn make_mosaic_image_row(mosaic_img:DynamicImage,width:u32,height:u32,index:u32,color_code_json:HashMap<String, String>)->ImageBuffer<Rgba<u8>, Vec<u8>>{
+    let mut result_mosaic_img:ImageBuffer<Rgba<u8>, Vec<u8>>=ImageBuffer::new(width*50, height/2*50);
+for y in 0..height/2{
+    for x in 0..width{
+            let pixel = mosaic_img.get_pixel(x, y+height/2*(index)).to_rgb();
+            let combine_image= image::open(format!("./src/crop/{}.png", calculate_min_color_distance_code(pixel,&color_code_json))).unwrap();
+            match result_mosaic_img.copy_from(&combine_image, x*50, y*50){
+                Ok(file)=>file,
+                Err(err)=>panic!("{}",err)
+            }
+        }
+    }
+    result_mosaic_img
+}
+
 fn make_mosaic_art(){
     let mosaic_img = image::open("./src/source/seed.jpg").unwrap();
     let (width, height) = mosaic_img.dimensions();
-    let mut result_mosaic_img:ImageBuffer<Rgba<u8>, Vec<u8>>=ImageBuffer::new(width*50, height*50);
     let color_code_json = load_color_code_json();
-    for y in 0..height{
-        println!("{}:{}", y,height);
-        for x in 0..width{
-            let pixel = mosaic_img.get_pixel(x, y).to_rgb();
-            let combine_image= image::open(format!("./src/crop/{}.png", calculate_min_color_distance_code(pixel,&color_code_json))).unwrap();
-            result_mosaic_img.copy_from(&combine_image, x*50, y*50).unwrap();
+
+    let mut handles = vec![];
+    let results = Arc::new(Mutex::new(Vec::new())); // 結果を格納する可変のVecをMutexで保護するArcを作成する
+    for i in 0..2{
+        let results = results.clone(); // Arcのクローンを作成し、スレッドに渡す
+        let mosaic_img = mosaic_img.clone();
+        let color_code_json = color_code_json.clone();
+        let handle = thread::spawn(move || {
+            let result = make_mosaic_image_row(mosaic_img,width.clone(),height.clone(),i,color_code_json);
+
+            let mut results = results.lock().unwrap();
+            results.push((i, result)); // 結果をMutexで保護された可変のVecに追加する
+        });
+        handles.push(handle);
+    }
+
+
+    for handle in handles {
+        handle.join().unwrap();
+    }
+
+    let mut sorted_results = results.lock().unwrap(); // 結果のVecのロックを取得する
+    sorted_results.sort_by(|a, b| a.0.cmp(&b.0)); // インデックス順に並べる
+    let mut result_mosaic_img:ImageBuffer<Rgba<u8>, Vec<u8>>=ImageBuffer::new(width*50, height*50);
+    for ((y,result)) in sorted_results.iter(){
+        match result_mosaic_img.copy_from(result, 0, height/2*50) {
+            Ok(file)=>file,
+            Err(err)=>panic!("{}", err)
         }
     }
     result_mosaic_img.save("./result.png").unwrap();
+
 }
 fn calculate_min_color_distance_code(color: Rgb<u8>,image_colors:&HashMap<String,String>)->&str{
     let mut min_color_distance=196608;
@@ -128,7 +164,7 @@ fn calculate_min_color_distance_code(color: Rgb<u8>,image_colors:&HashMap<String
         let color_distance = calculate_color_distance(image_color_number, color);
         if color_distance < min_color_distance{
             min_color_distance = color_distance;
-            min_image_key =key
+            min_image_key =key;
         }
     }
     min_image_key
