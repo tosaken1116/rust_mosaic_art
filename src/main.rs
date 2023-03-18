@@ -15,6 +15,7 @@ use std::u8;
 use std::env;
 use prog_rs::prelude::*;
 
+static THREAD_NUM: u32 = 6;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -152,10 +153,10 @@ fn make_mosaic_image_row(
     color_code_json: HashMap<String, String>,
 ) -> ImageBuffer<Rgba<u8>, Vec<u8>> {
     let mut result_mosaic_img: ImageBuffer<Rgba<u8>, Vec<u8>> =
-        ImageBuffer::new(width * 50, height / 2 * 50);
-    for y in (0..height / 2).progress().with_prefix("make image row...") {
+        ImageBuffer::new(width * 50, height / THREAD_NUM * 50);
+    for y in (0..height / THREAD_NUM).progress().with_prefix("make image row...") {
         for x in 0..width {
-            let pixel = mosaic_img.get_pixel(x, y + height / 2 * (index)).to_rgb();
+            let pixel = mosaic_img.get_pixel(x, y + height / THREAD_NUM * (index)).to_rgb();
             let file_path = format!(
                 "./src/crop/{}.png",
                 calculate_min_color_distance_code(pixel, &color_code_json)
@@ -186,7 +187,7 @@ fn make_mosaic_art() {
 
     let mut handles = vec![];
     let results = Arc::new(Mutex::new(Vec::new()));
-    for i in 0..2 {
+    for i in 0..THREAD_NUM {
         let results = results.clone();
         let mosaic_img = mosaic_img.clone();
         let color_code_json = color_code_json.clone();
@@ -218,7 +219,7 @@ fn make_mosaic_art() {
     let mut result_mosaic_img: ImageBuffer<Rgba<u8>, Vec<u8>> =
         ImageBuffer::new(width * 50, height * 50);
     for (_, result) in sorted_results.iter() {
-        match result_mosaic_img.copy_from(result, 0, height / 2 * 50) {
+        match result_mosaic_img.copy_from(result, 0, height / THREAD_NUM * 50) {
             Ok(file) => file,
             Err(err) => panic!("{}", err),
         }
