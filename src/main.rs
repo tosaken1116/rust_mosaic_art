@@ -12,11 +12,18 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::thread;
 use std::u8;
+use std::env;
+
 
 fn main() {
+    let args: Vec<String> = env::args().collect();
     let seeds_images_dir = "./src/seed_images";
-    crop_images((&seeds_images_dir).to_string());
-    save_img_colors((&seeds_images_dir).to_string());
+    if args[1]=="update"{
+        println!("update started");
+        crop_images((&seeds_images_dir).to_string());
+        save_img_colors((&seeds_images_dir).to_string());
+        println!("update was finished");
+    }
     make_mosaic_art();
 }
 
