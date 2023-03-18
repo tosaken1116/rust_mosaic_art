@@ -13,16 +13,19 @@ use std::sync::Mutex;
 use std::thread;
 use std::u8;
 use std::env;
+use prog_rs::prelude::*;
 
 
 fn main() {
     let args: Vec<String> = env::args().collect();
     let seeds_images_dir = "./src/seed_images";
-    if args[1]=="update"{
-        println!("update started");
-        crop_images((&seeds_images_dir).to_string());
-        save_img_colors((&seeds_images_dir).to_string());
-        println!("update was finished");
+    if args.len() == 2{
+        if args[1]=="update"{
+            println!("update started");
+            crop_images((&seeds_images_dir).to_string());
+            save_img_colors((&seeds_images_dir).to_string());
+            println!("update was finished");
+        }
     }
     make_mosaic_art();
 }
@@ -150,7 +153,7 @@ fn make_mosaic_image_row(
 ) -> ImageBuffer<Rgba<u8>, Vec<u8>> {
     let mut result_mosaic_img: ImageBuffer<Rgba<u8>, Vec<u8>> =
         ImageBuffer::new(width * 50, height / 2 * 50);
-    for y in 0..height / 2 {
+    for y in (0..height / 2).progress().with_prefix("make image row...") {
         for x in 0..width {
             let pixel = mosaic_img.get_pixel(x, y + height / 2 * (index)).to_rgb();
             let file_path = format!(
@@ -220,6 +223,7 @@ fn make_mosaic_art() {
             Err(err) => panic!("{}", err),
         }
     }
+    println!("Saving...");
     match result_mosaic_img.save("./result.png") {
         Ok(_) => {}
         Err(e) => {
